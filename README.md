@@ -5,7 +5,8 @@ This payload allows the **Hak5 WiFi Pineapple Pager** to upload collected wardri
 It automatically handles the upload process and archives successfully uploaded files to prevent duplicates.
 
 ## Features
-- **Smart Connectivity:** Checks for an active internet connection (Google DNS ping) before running.
+- **Smart Connectivity:** Checks for an active internet connection (ping) before running.
+- **Auto Retry:** Reconnects to Client AP and retries connectivity (10s then 20s by default).
 - **Dependency Management:** Automatically installs `curl` via opkg if it is missing.
 - **Batch Processing:** Iterates through the default `/mmc/root/loot/wigle/` directory.
 - **Deduplication:** Moves successfully uploaded files to an `/uploaded` subdirectory.
@@ -53,6 +54,11 @@ API_NAME="YOUR_API_NAME_HERE"
 API_TOKEN="YOUR_API_TOKEN_HERE"
 
 Replace the placeholders with your actual Encoded for use API Name and Token from Wigle.net.
+
+Optional connectivity settings (defaults are reasonable for most setups):
+- `CLIENT_RECONNECT_CMD` controls how the Pager reconnects to Client AP.
+- `RETRY_LIMIT`, `RETRY_WAIT_1`, `RETRY_WAIT_2` control retry behavior.
+- `PROMPT_ON_FAIL=true` enables a manual down-arrow retry prompt after auto retries.
 Usage
 
 On the Pager, navigate to Payloads -> User -> General -> WigleUpload.

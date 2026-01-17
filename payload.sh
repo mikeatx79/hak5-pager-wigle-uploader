@@ -14,6 +14,15 @@ API_TOKEN="YOUR_API_TOKEN_HERE"
 LOOT_DIR="/mmc/root/loot/wigle"
 ARCHIVE_DIR="$LOOT_DIR/uploaded"
 
+# Connectivity / retry settings
+PING_TARGET="8.8.8.8"
+RETRY_LIMIT=2
+RETRY_WAIT_1=10
+RETRY_WAIT_2=20
+PROMPT_ON_FAIL=true
+# Adjust this to your preferred Client AP reconnect command.
+# Common options: "ifdown wwan; ifup wwan" or "/etc/init.d/network restart"
+CLIENT_RECONNECT_CMD="ifdown wwan 2>/dev/null; ifup wwan 2>/dev/null"
 # --- FUNCTIONS ---
 
 install_curl() {
@@ -27,14 +36,67 @@ install_curl() {
     fi
 }
 
+check_internet_once() {
+    ping -c 1 -W 3 "$PING_TARGET" >/dev/null 2>&1
+}
+
+reconnect_client_ap() {
+    LOG "Reconnecting to Client AP..."
+    sh -c "$CLIENT_RECONNECT_CMD"
+}
+
+prompt_manual_retry() {
+    LOG "Press DOWN to retry reconnect, any other key to abort."
+    local key rest
+    read -rsn1 key
+    if [ "$key" = $'\x1b' ]; then
+        read -rsn2 rest
+        key="$key$rest"
+    fi
+    if [ "$key" = $'\x1b[B' ]; then
+        reconnect_client_ap
+        LOG "Waiting $RETRY_WAIT_1 seconds..."
+        sleep "$RETRY_WAIT_1"
+        if check_internet_once; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 check_internet() {
     LOG "Checking Network..."
-    # Ping Google DNS to verify upstream connection
-    if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
-        LOG "FAIL: No Internet"
-        LOG "Check Gateway/WiFi"
-        exit 1
+    if check_internet_once; then
+        return 0
     fi
+
+    LOG "No Internet detected. Retrying..."
+    local attempt wait_time
+    attempt=1
+    while [ "$attempt" -le "$RETRY_LIMIT" ]; do
+        reconnect_client_ap
+        if [ "$attempt" -eq 1 ]; then
+            wait_time="$RETRY_WAIT_1"
+        else
+            wait_time="$RETRY_WAIT_2"
+        fi
+        LOG "Waiting $wait_time seconds..."
+        sleep "$wait_time"
+        if check_internet_once; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+    done
+
+    if [ "$PROMPT_ON_FAIL" = "true" ]; then
+        if prompt_manual_retry; then
+            return 0
+        fi
+    fi
+
+    LOG "FAIL: No Internet"
+    LOG "Check Gateway/WiFi"
+    exit 1
 }
 
 # --- MAIN EXECUTION ---
